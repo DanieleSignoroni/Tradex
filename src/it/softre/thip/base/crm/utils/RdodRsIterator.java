@@ -66,7 +66,7 @@ public class RdodRsIterator extends ResultSetIterator {
 		rdod.setAllegatoSchedaB(cursor.getString("Allegato_Scheda_B"));
 		rdod.setAllegatoOffertaFirmata(cursor.getString("Allegato_Offerta_Firmata"));
 		rdod.setTabella(cursor.getString("Tabella"));
-		rdod.setStatoInterscambio(cursor.getString("Stato_Interscambio").charAt(0));
+		rdod.setStatoInterscambio(cursor.getString("Stato_Interscambio") != null ? cursor.getString("Stato_Interscambio").charAt(0) : '0');
 		rdod.setKeyPth(cursor.getString("Key_Pth"));
 		rdod.setCreatedAt(cursor.getDate("created_at"));
 		rdod.setUpdatedAt(cursor.getDate("updated_at"));

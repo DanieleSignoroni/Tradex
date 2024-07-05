@@ -57,10 +57,10 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 		boolean isOk = true;
 		List<Rdod> records = leggiRdodDaImportare();
 		if(!records.isEmpty()) {
-			Map<Integer,OrdineVendita> offerteImportate = new HashMap<Integer, OrdineVendita>();
+			Map<String,OrdineVendita> offerteImportate = new HashMap<String, OrdineVendita>();
 			for(Rdod offerta : records) {
+				offerta.setCodCliPh("103737");
 				output.println("--> Inizio il processo dell'offerta {"+offerta.getIdRdod()+"}");
-				offerta.setCodCliPh("001452");
 				try {
 					if(!offerta.isClienteCodificato()) {
 						//codifico il cliente
@@ -166,7 +166,7 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 								}
 							}
 							for(RdoAccessorio accessorio : offerta.getAccessori()) {
-								Articolo articolo = getArticoloPth(ordine.getIdAzienda(), accessorio.getArticoloPh());
+								Articolo articolo = getArticoloPth(ordine.getIdAzienda(), accessorio.getArticoloPh().toUpperCase());
 								if(articolo != null) {
 									BODataCollector boDCRig = createDataCollector("OrdineVenditaRigaPrm");
 									OrdineVenditaRigaPrm riga = (OrdineVenditaRigaPrm) boDCRig.getBo();
@@ -188,7 +188,7 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 							bodcTes.setAutoCommit(false);
 							rc = bodcTes.save();
 							if(rc == BODataCollector.OK) {
-								offerteImportate.put(offerta.getIdRdod(), (OrdineVendita) bodcTes.getBo());
+								offerteImportate.put(offerta.getNumeroRdod(), (OrdineVendita) bodcTes.getBo());
 								ConnectionManager.commit();
 								output.println("--> Creato correttamente l'ordine di vendita {"+bodcTes.getBo().getKey()+"}");
 							}else {
@@ -201,7 +201,7 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 					}
 				}catch (Exception e) {
 					output.println(" ** --> Errore opportunita : "+offerta.getIdRdod()+"..."+e.getMessage());
-					e.printStackTrace(Trace.excStream);
+					e.printStackTrace();
 				}
 				output.println("--> Termino il processo dell'offerta {"+offerta.getIdRdod()+"}");
 			}
@@ -214,17 +214,17 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 				Connection crmEasyTradex = null;
 				try {
 					crmEasyTradex = ImportOrdiniCrmUtils.getInstance().getCrmEasyTradexConnection();
-					for (Map.Entry<Integer, OrdineVendita> entry : offerteImportate.entrySet()) {
-						Integer idRdod = entry.getKey();
+					for (Map.Entry<String, OrdineVendita> entry : offerteImportate.entrySet()) {
+						String numeroRdod = entry.getKey();
 						OrdineVendita ordine = entry.getValue();
-						int risUpt = ImportOrdiniCrmUtils.getInstance().flaggaRdodProcessata(crmEasyTradex, idRdod, ordine);
+						int risUpt = ImportOrdiniCrmUtils.getInstance().flaggaRdodProcessata(crmEasyTradex, numeroRdod, ordine);
 						if(risUpt < 0) {
-							output.println(" ** Impossibile flaggare l'offerta {"+idRdod+"} come importata, ordine : "+ordine.getKey());
+							output.println(" ** Impossibile flaggare l'offerta {"+numeroRdod+"} come importata, ordine : "+ordine.getKey());
 							crmEasyTradex.rollback();
 						}else {
 							crmEasyTradex.commit();
 						}
-						output.println("--> Offerta {"+idRdod+"} flaggata "+(risUpt > 0 ? "correttamente" : "con errori"));
+						output.println("--> Offerta {"+numeroRdod+"} flaggata "+(risUpt > 0 ? "correttamente" : "con errori"));
 					}
 				}catch (SQLException e) {
 					e.printStackTrace(Trace.excStream);
@@ -257,14 +257,16 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 		if(!offerta.isClienteCodificato())
 			ordine.setIdCau(recuperaCausaleTestata(offerta));
 		else
-			ordine.setIdCau(BATCH_RES);
+			ordine.setIdCau("VE");
 		ordine.setIdMagazzino("001");
 		ordine.completaBO();
 
 		//ora i dati 
 		ordine.setNumeroOrdineIntestatario(offerta.getNumeroRdod());
 		ordine.setDataDocumento((Date) offerta.getCreatedAt());
-
+		if(offerta.getTotale().getScontoRdod() > 0) {
+			ordine.setPrcScontoIntestatario(new BigDecimal(offerta.getTotale().getScontoRdod()));
+		}
 	}
 
 	protected String recuperaCausaleTestata(Rdod offerta) {
@@ -308,6 +310,7 @@ public class ImportOrdiniCrm extends BatchRunnable implements Authorizable{
 			riga.setIdAssogIVA(articolo.getIdAssoggettamentoIVA());
 		else
 			riga.setIdAssogIVA(ordine.getIdAssogIva());
+		riga.setServizioCalcDatiVendita(false); //disattivo il recupero dei prezzi automatico 
 	}
 
 	protected Articolo getArticoloPth(String idAzienda,String idArticolo) {
